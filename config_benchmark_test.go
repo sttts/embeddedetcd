@@ -41,9 +41,10 @@ import (
 )
 
 const (
-	numOperations = 1000 // Number of key-value pairs to write/read
-	keyPrefix     = "benchmark-key-"
-	valuePrefix   = "benchmark-value-"
+	numOperations         = 1000 // Number of key-value pairs to write/read
+	keyPrefix             = "benchmark-key-"
+	valuePrefix           = "benchmark-value-"
+	serverStartupTimeout  = 65 * time.Second // Timeout for etcd server startup
 )
 
 func BenchmarkNormalMode(b *testing.B) {
@@ -135,7 +136,7 @@ func benchmarkEtcdMode(b *testing.B, unsafeMode bool, withOptimizations bool) {
 				b.Fatalf("Server failed to start: %v", err)
 			}
 			// Server is ready (Run returned nil)
-		case <-time.After(65 * time.Second):
+		case <-time.After(serverStartupTimeout):
 			cancel()
 			b.Fatalf("Server took too long to start")
 		}
@@ -218,9 +219,12 @@ func benchmarkEtcdMode(b *testing.B, unsafeMode bool, withOptimizations bool) {
 }
 
 // findAvailablePort returns a random available port number as a string
+// Note: This simple port allocation strategy works for sequential benchmark runs.
+// For parallel benchmarks, consider using a more sophisticated approach such as
+// binding to port 0 and retrieving the OS-assigned port.
 func findAvailablePort() string {
 	// Use a simple port allocation strategy based on process ID and timestamp
-	// This should provide unique ports for parallel benchmark runs
+	// This should provide unique ports for sequential benchmark runs
 	base := 22379
 	offset := (os.Getpid() + int(time.Now().UnixNano()%10000)) % 10000
 	port := base + offset
@@ -229,7 +233,7 @@ func findAvailablePort() string {
 
 // measureDiskUsage calculates the total disk usage, WAL file count, and snapshot file count
 func measureDiskUsage(dir string) (totalBytes int64, walFiles int, snapFiles int) {
-	filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -250,5 +254,10 @@ func measureDiskUsage(dir string) (totalBytes int64, walFiles int, snapFiles int
 		}
 		return nil
 	})
+	if err != nil {
+		// Log error but don't fail the benchmark
+		// In worst case, metrics will be zero
+		return 0, 0, 0
+	}
 	return
 }
