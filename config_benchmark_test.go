@@ -41,10 +41,10 @@ import (
 )
 
 const (
-	numOperations         = 1000 // Number of key-value pairs to write/read
-	keyPrefix             = "benchmark-key-"
-	valuePrefix           = "benchmark-value-"
-	serverStartupTimeout  = 65 * time.Second // Timeout for etcd server startup
+	numOperations        = 1000             // Number of key-value pairs to write/read
+	keyPrefix            = "benchmark-key-"
+	valuePrefix          = "benchmark-value-"
+	serverStartupTimeout = 65 * time.Second // Timeout for etcd server startup (slightly longer than etcd's internal 60s timeout)
 )
 
 func BenchmarkNormalMode(b *testing.B) {
@@ -242,11 +242,12 @@ func measureDiskUsage(dir string) (totalBytes int64, walFiles int, snapFiles int
 			if err == nil {
 				totalBytes += info.Size()
 
-				// Count WAL files
+				// Count WAL files (*.wal extension)
 				if filepath.Ext(path) == ".wal" {
 					walFiles++
 				}
-				// Count snapshot files
+				// Count snapshot files (*.snap extension OR files in snap/ directory)
+				// etcd stores snapshots with .snap extension in the snap/ subdirectory
 				if filepath.Ext(path) == ".snap" || filepath.Base(filepath.Dir(path)) == "snap" {
 					snapFiles++
 				}
